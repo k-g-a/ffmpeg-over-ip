@@ -31,13 +31,14 @@ else
     echo "PASS: ffmpeg exited with code $EXIT_CODE for missing input"
 fi
 
-# --- Test 2: Unwritable output directory ---
+# --- Test 2: Invalid output parent (also fails when running as root) ---
 echo ""
 echo "--- Test 2: Unwritable output path ---"
+touch "$TMPDIR_TEST/not-a-directory"
 EXIT_CODE=0
 "$HARNESS" "$FFMPEG" \
     -f lavfi -i "color=c=red:s=64x64:d=1:r=5" \
-    -f rawvideo "/nonexistent/deep/path/output.raw" -y 2>/dev/null || EXIT_CODE=$?
+    -f rawvideo "$TMPDIR_TEST/not-a-directory/output.raw" -y 2>/dev/null || EXIT_CODE=$?
 
 if [ "$EXIT_CODE" -eq 0 ]; then
     echo "FAIL: ffmpeg should have exited with error for unwritable path"

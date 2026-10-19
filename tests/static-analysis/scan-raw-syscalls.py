@@ -102,8 +102,7 @@ def main():
     if len(sys.argv) > 1:
         ffmpeg_src = Path(sys.argv[1])
     else:
-        version = (root / "FFMPEG_VERSION").read_text().strip()
-        ffmpeg_src = root / "build" / f"ffmpeg-{version}"
+        ffmpeg_src = root / "build" / "jellyfin-ffmpeg"
     allowlist_path = root / "tests" / "static-analysis" / "known-raw-syscall-files.txt"
     libavformat = ffmpeg_src / "libavformat"
 

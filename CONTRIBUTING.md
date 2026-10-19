@@ -1,5 +1,8 @@
 # Contributing
 
+See [FFmpeg 8.1 validation](docs/ffmpeg-8.1-validation.md) for the pinned
+source, full Windows builds and the pre-merge test checklist.
+
 ## Building from Source
 
 ### Prerequisites

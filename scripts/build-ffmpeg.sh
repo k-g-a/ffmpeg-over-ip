@@ -73,7 +73,7 @@ echo "Applying fio patches..."
 cd "$SRC_DIR"
 for patch in "$ROOT/patches"/*.patch; do
     echo "  Applying $(basename "$patch")..."
-    patch -p1 < "$patch"
+    patch --batch --fuzz=0 -p1 < "$patch"
 done
 
 # Apply jellyfin patches (if patches exist)

@@ -19,7 +19,8 @@
 # Environment:
 #   GHCR_REPO     GHCR image repo for caching (e.g. ghcr.io/myorg/myrepo)
 #                 If set, images are pulled from / pushed to this registry.
-#                 Only used for Docker-based builds.
+#                 Only used for Docker-based builds. Source and script hashes
+#                 are appended to isolate caches across FFmpeg upgrades.
 #
 set -euo pipefail
 
@@ -30,6 +31,13 @@ BUILDER_DIR="$VENDOR_DIR/builder"
 
 GHCR_REPO="${GHCR_REPO:-}"
 LOCAL_REPO="localhost/ffmpeg-over-ip"
+
+# Dependency images must not reuse a 7.x toolchain after the source pin changes.
+if [[ -n "$GHCR_REPO" ]]; then
+    SOURCE_SHA=$(git -C "$VENDOR_DIR" rev-parse HEAD)
+    SCRIPT_SHA=$(git hash-object "$0")
+    GHCR_REPO="${GHCR_REPO}/${SOURCE_SHA}-${SCRIPT_SHA}"
+fi
 
 if [[ $# -lt 1 ]]; then
     echo "Usage: $0 <target>"

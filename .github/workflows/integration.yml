@@ -17,12 +17,16 @@ jobs:
         with:
           submodules: true
 
+      - name: Identify FFmpeg source
+        id: ffmpeg-source
+        run: echo "sha=$(git -C third_party/jellyfin-ffmpeg rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
       - name: Cache ffmpeg build
         id: cache-ffmpeg
         uses: actions/cache@v4
         with:
           path: build/ffmpeg
-          key: ffmpeg-${{ hashFiles('third_party/jellyfin-ffmpeg/.git', 'patches/*.patch', 'fio/fio.c', 'fio/fio.h') }}-minimal
+          key: ffmpeg-${{ runner.os }}-${{ steps.ffmpeg-source.outputs.sha }}-${{ hashFiles('scripts/build-ffmpeg.sh', 'patches/*.patch', 'fio/fio.c', 'fio/fio.h') }}-minimal
 
       - name: Build ffmpeg (minimal)
         if: steps.cache-ffmpeg.outputs.cache-hit != 'true'

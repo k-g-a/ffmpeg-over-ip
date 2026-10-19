@@ -5,6 +5,7 @@ on:
     branches: [main]
     tags: ['v*']
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -15,31 +16,37 @@ env:
 jobs:
   build:
     name: ${{ matrix.platform }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - platform: linux-amd64
+            runner: ubuntu-latest
             goos: linux
             goarch: amd64
             ffmpeg_target: linux64
             ext: ""
           - platform: linux-arm64
+            runner: ubuntu-latest
             goos: linux
             goarch: arm64
             ffmpeg_target: linuxarm64
             ext: ""
           - platform: windows-amd64
+            runner: ubuntu-latest
             goos: windows
             goarch: amd64
             ffmpeg_target: win64
             ext: ".exe"
           - platform: macos-arm64
+            runner: macos-14
             goos: darwin
             goarch: arm64
             ffmpeg_target: macarm64
             ext: ""
           - platform: macos-amd64
+            runner: macos-14
             goos: darwin
             goarch: amd64
             ffmpeg_target: mac64
@@ -69,10 +76,31 @@ jobs:
           go build -trimpath -ldflags="-s -w" \
             -o ffmpeg-over-ip-server${{ matrix.ext }} ./cmd/server
 
+      - name: Identify FFmpeg source and package
+        id: ffmpeg-source
+        shell: bash
+        run: |
+          echo "sha=$(git -C third_party/jellyfin-ffmpeg rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          version=$(awk -F'[()]' '/^jellyfin-ffmpeg/{print $2; exit}' third_party/jellyfin-ffmpeg/debian/changelog)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      # Never package the historical 7.x archives checked into artifacts/.
+      - name: Cache source-built FFmpeg archive
+        id: ffmpeg-cache
+        uses: actions/cache@v4
+        with:
+          path: third_party/jellyfin-ffmpeg/builder/artifacts
+          key: ffmpeg-release-${{ matrix.platform }}-${{ steps.ffmpeg-source.outputs.sha }}-${{ hashFiles('scripts/build-release.sh', 'patches/*.patch', 'fio/fio.c', 'fio/fio.h') }}
+
+      - name: Build patched FFmpeg with Jellyfin dependencies
+        if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: bash scripts/build-release.sh "${{ matrix.ffmpeg_target }}"
+
       - name: Extract ffmpeg binaries
         run: |
           mkdir -p ffmpeg-bin
-          ARCHIVE=$(ls artifacts/*_${{ matrix.ffmpeg_target }}-gpl.*)
+          ARCHIVE=$(ls third_party/jellyfin-ffmpeg/builder/artifacts/jellyfin-ffmpeg_${{ steps.ffmpeg-source.outputs.version }}_portable_${{ matrix.ffmpeg_target }}-gpl.*)
           case "$ARCHIVE" in
             *.tar.xz) tar xf "$ARCHIVE" -C ffmpeg-bin ;;
             *.zip)    unzip -q "$ARCHIVE" -d ffmpeg-bin ;;
@@ -92,6 +120,8 @@ jobs:
           cp "ffmpeg-over-ip-server${EXT}" server-staging/
           cp "ffmpeg-bin/ffmpeg${EXT}" server-staging/
           cp "ffmpeg-bin/ffprobe${EXT}" server-staging/
+          # Preserve any runtime libraries supplied by the Jellyfin builder.
+          find ffmpeg-bin -maxdepth 1 \( -name "*.dll" -o -name "*.so*" -o -name "*.dylib" \) -exec cp -P {} server-staging/ \;
           cp LICENSE LICENSE.ffmpeg server-staging/
 
           # Naming MUST stay <platform>-ffmpeg-over-ip-<role>.zip — the
@@ -102,8 +132,8 @@ jobs:
           (cd client-staging && zip -r "../dist/${client_name}.zip" .)
           (cd server-staging && zip -r "../dist/${server_name}.zip" .)
           (cd dist \
-            && sha256sum "${client_name}.zip" > "${client_name}.zip.sha256" \
-            && sha256sum "${server_name}.zip" > "${server_name}.zip.sha256")
+            && shasum -a 256 "${client_name}.zip" > "${client_name}.zip.sha256" \
+            && shasum -a 256 "${server_name}.zip" > "${server_name}.zip.sha256")
 
       - name: Upload archives
         uses: actions/upload-artifact@v4
